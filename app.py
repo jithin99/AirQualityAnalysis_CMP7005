@@ -12,7 +12,7 @@ st.markdown(
 )
 
 # Load model
-model = joblib.load("models/best_model.pkl")
+joblib.load("Models/best_model.pkl")
 mae = 10.37  # Model MAE
 
 # ===================== SIDEBAR =====================
