@@ -201,6 +201,6 @@ with tab3:
 # FOOTER
 # --------------------------------------------------
 st.markdown("---")
-st.markdown("👨‍🎓 **Student:** Jithin")
+
 st.markdown("📘 **Course:** CMP7005 – Air Quality Analysis")
 st.markdown("☁️ Deployed on Streamlit Cloud")
