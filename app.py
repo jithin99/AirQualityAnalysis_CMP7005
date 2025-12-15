@@ -6,7 +6,10 @@ import pandas as pd
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
-# City coordinates for map visualization
+
+# --------------------------------------------------
+# CITY COORDINATES (NO LAT/LON IN DATASET)
+# --------------------------------------------------
 CITY_COORDS = {
     "Delhi": [28.6139, 77.2090],
     "Mumbai": [19.0760, 72.8777],
@@ -20,7 +23,9 @@ CITY_COORDS = {
     "Lucknow": [26.8467, 80.9462]
 }
 
-# ---------------- PAGE CONFIG ----------------
+# --------------------------------------------------
+# PAGE CONFIG
+# --------------------------------------------------
 st.set_page_config(
     page_title="Air Quality Analysis – CMP7005",
     layout="wide"
@@ -29,14 +34,18 @@ st.set_page_config(
 st.title("🌫️ Air Quality Analysis & Prediction")
 st.markdown("CMP7005 PRACTICAL – Streamlit Cloud Deployment")
 
-# ---------------- LOAD DATA ----------------
+# --------------------------------------------------
+# LOAD DATA
+# --------------------------------------------------
 @st.cache_data
 def load_data():
     return pd.read_csv("Data/merged_data.csv")
 
 df = load_data()
 
-# ---------------- LOAD MODEL (Google Drive) ----------------
+# --------------------------------------------------
+# LOAD MODEL (GOOGLE DRIVE)
+# --------------------------------------------------
 MODEL_URL = "https://drive.google.com/uc?id=1N317Atsm71Is04H_P711V3Dk-jr5y1ou"
 MODEL_PATH = "model.pkl"
 
@@ -49,14 +58,16 @@ def load_model():
 
 model = load_model()
 
-# ---------------- TABS ----------------
+# --------------------------------------------------
+# TABS
+# --------------------------------------------------
 tab1, tab2, tab3 = st.tabs(
     ["🔮 PM2.5 Prediction", "📊 Dataset Overview", "🗺️ Air Quality Map"]
 )
 
-# =========================================================
+# ==================================================
 # 🔮 TAB 1 – PREDICTION
-# =========================================================
+# ==================================================
 with tab1:
     st.subheader("Predict PM2.5 Concentration")
 
@@ -73,26 +84,21 @@ with tab1:
         nh3 = st.number_input("NH₃ (µg/m³)", min_value=0.0, value=15.0)
 
     if st.button("🔮 Predict PM2.5"):
-        try:
-            X = np.array([[so2, no2, co, o3, pm10, nh3]])
-            pred = model.predict(X)[0]
+        X = np.array([[so2, no2, co, o3, pm10, nh3]])
+        pred = model.predict(X)[0]
 
-            st.success(f"🌟 Predicted PM2.5: **{pred:.2f} µg/m³**")
+        st.success(f"🌟 Predicted PM2.5: **{pred:.2f} µg/m³**")
 
-            if pred <= 60:
-                st.info("🟢 Air Quality: Good")
-            elif pred <= 120:
-                st.warning("🟡 Air Quality: Moderate")
-            else:
-                st.error("🔴 Air Quality: Poor")
+        if pred <= 60:
+            st.info("🟢 Air Quality: Good")
+        elif pred <= 120:
+            st.warning("🟡 Air Quality: Moderate")
+        else:
+            st.error("🔴 Air Quality: Poor")
 
-        except Exception as e:
-            st.error("Prediction failed")
-            st.exception(e)
-
-# =========================================================
+# ==================================================
 # 📊 TAB 2 – DATASET OVERVIEW
-# =========================================================
+# ==================================================
 with tab2:
     st.subheader("Dataset Overview")
 
@@ -105,30 +111,40 @@ with tab2:
     st.write("### Column Names")
     st.code(", ".join(df.columns))
 
-# =========================================================
-# 🗺️ TAB 3 – MAP VISUALIZATION
-# =========================================================
+# ==================================================
+# 🗺️ TAB 3 – AIR QUALITY MAP (FIXED)
+# ==================================================
 with tab3:
     st.subheader("India Air Quality Map (PM2.5)")
 
-    m = folium.Map(location=[22.5, 79], zoom_start=5)
+    # Average PM2.5 per city
+    city_pm = df.groupby("City")["PM2.5"].mean().reset_index()
 
-    for _, row in df.iterrows():
-        if not pd.isna(row["Latitude"]) and not pd.isna(row["Longitude"]):
+    # Base map
+    m = folium.Map(location=[22.5, 80.0], zoom_start=5)
+
+    for _, row in city_pm.iterrows():
+        city = row["City"]
+        pm25 = row["PM2.5"]
+
+        if city in CITY_COORDS:
+            lat, lon = CITY_COORDS[city]
+
             folium.CircleMarker(
-                location=[row["Latitude"], row["Longitude"]],
-                radius=5,
-                popup=f"PM2.5: {row['PM2.5']}",
-                color="red",
+                location=[lat, lon],
+                radius=8,
+                popup=f"{city}<br>PM2.5: {pm25:.2f}",
+                color="red" if pm25 > 60 else "orange" if pm25 > 30 else "green",
                 fill=True,
                 fill_opacity=0.7
             ).add_to(m)
 
     st_folium(m, width=1000, height=500)
 
-# ---------------- FOOTER ----------------
+# --------------------------------------------------
+# FOOTER
+# --------------------------------------------------
 st.markdown("---")
 st.markdown("👨‍🎓 **Student:** Jithin")
 st.markdown("📘 **Course:** CMP7005 – Air Quality Analysis")
 st.markdown("☁️ Deployed on Streamlit Cloud")
-
