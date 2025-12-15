@@ -1,68 +1,121 @@
-
-import streamlit as st
+import os
+import gdown
 import joblib
 import numpy as np
+import pandas as pd
+import streamlit as st
+import folium
+from streamlit_folium import st_folium
 
-# Page setup
-st.set_page_config(page_title="Air Quality App", layout="wide")
-st.title(" India Air Quality Analysis")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="Air Quality Analysis – CMP7005",
+    layout="wide"
+)
 
-st.markdown("""
-I built a simple Streamlit app where users enter pollutant values and the model predicts the PM2.5 level. This makes the model more interactive instead of just running in a notebook**.
-""")
+st.title("🌫️ Air Quality Analysis & Prediction")
+st.markdown("CMP7005 PRACTICAL – Streamlit Cloud Deployment")
 
-# Load model
-joblib.load("Models/best_model.pkl")
+# ---------------- LOAD DATA ----------------
+@st.cache_data
+def load_data():
+    return pd.read_csv("Data/merged_data.csv")
 
+df = load_data()
 
-st.header("Enter Pollutant Levels")
+# ---------------- LOAD MODEL (Google Drive) ----------------
+MODEL_URL = "https://drive.google.com/uc?id=1N317Atsm71Is04H_P711V3Dk-jr5y1ou"
+MODEL_PATH = "model.pkl"
 
-# Inputs
-pm10 = st.number_input("PM10 (µg/m³)", min_value=0.0, max_value=1000.0, value=100.0)
-no2 = st.number_input("NO2 (µg/m³)", min_value=0.0, max_value=300.0, value=30.0)
-so2 = st.number_input("SO2 (µg/m³)", min_value=0.0, max_value=200.0, value=20.0)
-co = st.number_input("CO (mg/m³)", min_value=0.0, max_value=50.0, value=1.0)
-benzene = st.number_input("Benzene (µg/m³)", min_value=0.0, max_value=50.0, value=1.0)
-toluene = st.number_input("Toluene (µg/m³)", min_value=0.0, max_value=100.0, value=5.0)
+@st.cache_resource
+def load_model():
+    if not os.path.exists(MODEL_PATH):
+        with st.spinner("⬇️ Downloading ML model (one-time)..."):
+            gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+    return joblib.load(MODEL_PATH)
 
-input_data = np.array([[pm10, no2, so2, co, benzene, toluene]])
-prediction = model.predict(input_data)[0]
-mae = 10.37  # From tuned model evaluation
+model = load_model()
 
-# Output
-st.header("Prediction Result")
-st.success(f"Estimated PM2.5: **{prediction:.2f} µg/m³**")
-st.write(f"Confidence range: **{prediction - mae:.2f} to {prediction + mae:.2f} µg/m³** (± MAE)")
+# ---------------- TABS ----------------
+tab1, tab2, tab3 = st.tabs(
+    ["🔮 PM2.5 Prediction", "📊 Dataset Overview", "🗺️ Air Quality Map"]
+)
 
-# Air quality category
-if prediction < 50:
-    category = "Good"
-    color = "🟢"
-    advisory = "Air quality is satisfactory and poses little or no risk."
-elif prediction < 100:
-    category = "Moderate"
-    color = "🟡"
-    advisory = "Acceptable air quality, but may affect sensitive individuals."
-elif prediction < 250:
-    category = "Poor"
-    color = "🟠"
-    advisory = "Air quality is unhealthy for sensitive groups. Reduce prolonged outdoor exposure."
-else:
-    category = "Hazardous"
-    color = "🔴"
-    advisory = "Health warnings of emergency conditions. Avoid outdoor activities."
+# =========================================================
+# 🔮 TAB 1 – PREDICTION
+# =========================================================
+with tab1:
+    st.subheader("Predict PM2.5 Concentration")
 
-st.markdown(f"### Air Quality Category: {color} **{category}**")
-st.info(advisory)
+    col1, col2 = st.columns(2)
 
-# Interpretation
-st.header(" Interpretation Guide")
-st.markdown("""
-- **PM2.5 < 50** → Good
-- **50 ≤ PM2.5 < 100** → Moderate
-- **100 ≤ PM2.5 < 250** → Poor
-- **PM2.5 ≥ 250** → Hazardous
+    with col1:
+        so2 = st.number_input("SO₂ (µg/m³)", min_value=0.0, value=10.0)
+        no2 = st.number_input("NO₂ (µg/m³)", min_value=0.0, value=20.0)
+        co = st.number_input("CO (mg/m³)", min_value=0.0, value=1.0)
 
-PM2.5 refers to fine particulate matter that can penetrate deep into the lungs and bloodstream.
-This model helps simulate pollution scenarios and assess air quality risk based on key pollutants.
-""")
+    with col2:
+        o3 = st.number_input("O₃ (µg/m³)", min_value=0.0, value=30.0)
+        pm10 = st.number_input("PM10 (µg/m³)", min_value=0.0, value=50.0)
+        nh3 = st.number_input("NH₃ (µg/m³)", min_value=0.0, value=15.0)
+
+    if st.button("🔮 Predict PM2.5"):
+        try:
+            X = np.array([[so2, no2, co, o3, pm10, nh3]])
+            pred = model.predict(X)[0]
+
+            st.success(f"🌟 Predicted PM2.5: **{pred:.2f} µg/m³**")
+
+            if pred <= 60:
+                st.info("🟢 Air Quality: Good")
+            elif pred <= 120:
+                st.warning("🟡 Air Quality: Moderate")
+            else:
+                st.error("🔴 Air Quality: Poor")
+
+        except Exception as e:
+            st.error("Prediction failed")
+            st.exception(e)
+
+# =========================================================
+# 📊 TAB 2 – DATASET OVERVIEW
+# =========================================================
+with tab2:
+    st.subheader("Dataset Overview")
+
+    st.write("### Sample Records")
+    st.dataframe(df.head())
+
+    st.write("### Dataset Statistics")
+    st.dataframe(df.describe())
+
+    st.write("### Column Names")
+    st.code(", ".join(df.columns))
+
+# =========================================================
+# 🗺️ TAB 3 – MAP VISUALIZATION
+# =========================================================
+with tab3:
+    st.subheader("India Air Quality Map (PM2.5)")
+
+    m = folium.Map(location=[22.5, 79], zoom_start=5)
+
+    for _, row in df.iterrows():
+        if not pd.isna(row["Latitude"]) and not pd.isna(row["Longitude"]):
+            folium.CircleMarker(
+                location=[row["Latitude"], row["Longitude"]],
+                radius=5,
+                popup=f"PM2.5: {row['PM2.5']}",
+                color="red",
+                fill=True,
+                fill_opacity=0.7
+            ).add_to(m)
+
+    st_folium(m, width=1000, height=500)
+
+# ---------------- FOOTER ----------------
+st.markdown("---")
+st.markdown("👨‍🎓 **Student:** Jithin")
+st.markdown("📘 **Course:** CMP7005 – Air Quality Analysis")
+st.markdown("☁️ Deployed on Streamlit Cloud")
+
