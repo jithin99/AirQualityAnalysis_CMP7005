@@ -1,67 +1,105 @@
 import streamlit as st
 import joblib
 import numpy as np
+import plotly.graph_objects as go
 
 # Page setup
-st.set_page_config(page_title="Air Quality App", layout="wide")
-st.title(" India Air Quality Analysis")
+st.set_page_config(page_title="India Air Quality App", layout="wide")
 
-st.markdown("""
-This app predicts **PM2.5 concentration** using a tuned Random Forest model trained on air quality data from 26 Indian cities (2015–2020).  
-It uses six key pollutants as input: **PM10, NO2, SO2, CO, Benzene, Toluene**.
-""")
+st.title(" India Air Quality Prediction App")
+st.markdown(
+    "This interactive app predicts **PM2.5 concentration** based on pollutant levels using a trained Machine Learning model."
+)
 
 # Load model
 model = joblib.load("models/best_model.pkl")
+mae = 10.37  # Model MAE
 
-st.header("Enter Pollutant Levels")
+# ===================== SIDEBAR =====================
+st.sidebar.header(" Input Controls")
 
-# Inputs
-pm10 = st.number_input("PM10 (µg/m³)", min_value=0.0, max_value=1000.0, value=100.0)
-no2 = st.number_input("NO2 (µg/m³)", min_value=0.0, max_value=300.0, value=30.0)
-so2 = st.number_input("SO2 (µg/m³)", min_value=0.0, max_value=200.0, value=20.0)
-co = st.number_input("CO (mg/m³)", min_value=0.0, max_value=50.0, value=1.0)
-benzene = st.number_input("Benzene (µg/m³)", min_value=0.0, max_value=50.0, value=1.0)
-toluene = st.number_input("Toluene (µg/m³)", min_value=0.0, max_value=100.0, value=5.0)
+city = st.sidebar.selectbox(
+    "Select City Scenario",
+    ["Custom", "Delhi", "Mumbai", "Bengaluru"]
+)
 
-input_data = np.array([[pm10, no2, so2, co, benzene, toluene]])
-prediction = model.predict(input_data)[0]
-mae = 10.37  # From tuned model evaluation
+# Preset values
+presets = {
+    "Delhi": [250, 80, 40, 2.5, 4, 10],
+    "Mumbai": [150, 50, 25, 1.5, 2, 6],
+    "Bengaluru": [90, 35, 15, 1.0, 1, 4]
+}
 
-# Output
-st.header("Prediction Result")
-st.success(f"Estimated PM2.5: **{prediction:.2f} µg/m³**")
-st.write(f"Confidence range: **{prediction - mae:.2f} to {prediction + mae:.2f} µg/m³** (± MAE)")
-
-# Air quality category
-if prediction < 50:
-    category = "Good"
-    color = "🟢"
-    advisory = "Air quality is satisfactory and poses little or no risk."
-elif prediction < 100:
-    category = "Moderate"
-    color = "🟡"
-    advisory = "Acceptable air quality, but may affect sensitive individuals."
-elif prediction < 250:
-    category = "Poor"
-    color = "🟠"
-    advisory = "Air quality is unhealthy for sensitive groups. Reduce prolonged outdoor exposure."
+if city != "Custom":
+    pm10, no2, so2, co, benzene, toluene = presets[city]
 else:
-    category = "Hazardous"
-    color = "🔴"
-    advisory = "Health warnings of emergency conditions. Avoid outdoor activities."
+    pm10 = st.sidebar.slider("PM10 (µg/m³)", 0.0, 1000.0, 100.0)
+    no2 = st.sidebar.slider("NO2 (µg/m³)", 0.0, 300.0, 30.0)
+    so2 = st.sidebar.slider("SO2 (µg/m³)", 0.0, 200.0, 20.0)
+    co = st.sidebar.slider("CO (mg/m³)", 0.0, 50.0, 1.0)
+    benzene = st.sidebar.slider("Benzene (µg/m³)", 0.0, 50.0, 1.0)
+    toluene = st.sidebar.slider("Toluene (µg/m³)", 0.0, 100.0, 5.0)
 
-st.markdown(f"### Air Quality Category: {color} **{category}**")
-st.info(advisory)
+# ===================== PREDICTION =====================
+st.header(" Prediction")
 
-# Interpretation
-st.header(" Interpretation Guide")
-st.markdown("""
-- **PM2.5 < 50** → Good  
-- **50 ≤ PM2.5 < 100** → Moderate  
-- **100 ≤ PM2.5 < 250** → Poor  
-- **PM2.5 ≥ 250** → Hazardous  
+if st.button("Predict PM2.5"):
+    input_data = np.array([[pm10, no2, so2, co, benzene, toluene]])
+    prediction = model.predict(input_data)[0]
 
-PM2.5 refers to fine particulate matter that can penetrate deep into the lungs and bloodstream.  
-This model helps simulate pollution scenarios and assess air quality risk based on key pollutants.
-""")
+    # Category logic
+    if prediction < 50:
+        category, color = "Good", "green"
+        advisory = "Air quality is satisfactory."
+    elif prediction < 100:
+        category, color = "Moderate", "gold"
+        advisory = "Acceptable air quality for most individuals."
+    elif prediction < 250:
+        category, color = "Poor", "orange"
+        advisory = "Unhealthy for sensitive groups."
+    else:
+        category, color = "Hazardous", "red"
+        advisory = "Avoid outdoor activities."
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.success(f"### PM2.5: {prediction:.2f} µg/m³")
+        st.write(
+            f"**Confidence Range:** {prediction - mae:.2f} – {prediction + mae:.2f} µg/m³"
+        )
+        st.markdown(f"### Category: **:{color}[{category}]**")
+        st.info(advisory)
+
+    # ===================== GAUGE =====================
+    with col2:
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=prediction,
+            title={"text": "PM2.5 Level"},
+            gauge={
+                "axis": {"range": [0, 400]},
+                "steps": [
+                    {"range": [0, 50], "color": "green"},
+                    {"range": [50, 100], "color": "yellow"},
+                    {"range": [100, 250], "color": "orange"},
+                    {"range": [250, 400], "color": "red"},
+                ],
+                "threshold": {
+                    "line": {"color": "black", "width": 4},
+                    "value": prediction
+                }
+            }
+        ))
+        st.plotly_chart(fig, use_container_width=True)
+
+# ===================== INFO =====================
+with st.expander(" Interpretation Guide"):
+    st.markdown("""
+    - **PM2.5 < 50** → Good
+    - **50 – 100** → Moderate
+    - **100 – 250** → Poor
+    - **> 250** → Hazardous
+
+    PM2.5 particles can penetrate deep into the lungs and bloodstream, causing serious health issues.
+    """)
