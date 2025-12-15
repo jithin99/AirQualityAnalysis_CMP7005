@@ -43,11 +43,11 @@ else:
 # ===================== PREDICTION =====================
 st.header(" Prediction")
 
+input_data = np.array([[pm10, no2, so2, co, benzene, toluene]])
+
 if st.button("Predict PM2.5"):
-    input_data = np.array([[pm10, no2, so2, co, benzene, toluene]])
     prediction = model.predict(input_data)[0]
 
-    # Category logic
     if prediction < 50:
         category, color = "Good", "green"
         advisory = "Air quality is satisfactory."
@@ -61,15 +61,6 @@ if st.button("Predict PM2.5"):
         category, color = "Hazardous", "red"
         advisory = "Avoid outdoor activities."
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.success(f"### PM2.5: {prediction:.2f} µg/m³")
-        st.write(
-            f"**Confidence Range:** {prediction - mae:.2f} – {prediction + mae:.2f} µg/m³"
-        )
-        st.markdown(f"### Category: **:{color}[{category}]**")
-        st.info(advisory)
 
     # ===================== GAUGE =====================
     with col2:
