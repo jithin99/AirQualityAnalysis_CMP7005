@@ -12,7 +12,8 @@ I built a simple Streamlit app where users enter pollutant values and the model 
 """)
 
 # Load model
-model = joblib.load("models/best_model.pkl")
+joblib.load("Models/best_model.pkl")
+
 
 st.header("Enter Pollutant Levels")
 
