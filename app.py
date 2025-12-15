@@ -8,7 +8,7 @@ import folium
 from streamlit_folium import st_folium
 
 # --------------------------------------------------
-# CITY COORDINATES (NO LAT/LON IN DATASET)
+# CITY COORDINATES
 # --------------------------------------------------
 CITY_COORDS = {
     "Delhi": [28.6139, 77.2090],
@@ -44,6 +44,16 @@ def load_data():
 df = load_data()
 
 # --------------------------------------------------
+# KPI METRICS
+# --------------------------------------------------
+col1, col2, col3 = st.columns(3)
+col1.metric("Average PM2.5", f"{df['PM2.5'].mean():.2f}")
+col2.metric("Maximum PM2.5", f"{df['PM2.5'].max():.2f}")
+col3.metric("Cities Covered", df["City"].nunique())
+
+st.markdown("---")
+
+# --------------------------------------------------
 # LOAD MODEL (GOOGLE DRIVE)
 # --------------------------------------------------
 MODEL_URL = "https://drive.google.com/uc?id=1N317Atsm71Is04H_P711V3Dk-jr5y1ou"
@@ -59,10 +69,29 @@ def load_model():
 model = load_model()
 
 # --------------------------------------------------
+# AQI CATEGORY FUNCTION
+# --------------------------------------------------
+def aqi_category(pm):
+    if pm <= 30:
+        return "Good"
+    elif pm <= 60:
+        return "Satisfactory"
+    elif pm <= 90:
+        return "Moderate"
+    elif pm <= 120:
+        return "Poor"
+    elif pm <= 250:
+        return "Very Poor"
+    else:
+        return "Severe"
+
+df["AQI Category"] = df["PM2.5"].apply(aqi_category)
+
+# --------------------------------------------------
 # TABS
 # --------------------------------------------------
 tab1, tab2, tab3 = st.tabs(
-    ["🔮 PM2.5 Prediction", "📊 Dataset Overview", "🗺️ Air Quality Map"]
+    ["🔮 PM2.5 Prediction", "📊 Dataset & Analysis", "🗺️ Air Quality Map"]
 )
 
 # ==================================================
@@ -89,38 +118,59 @@ with tab1:
 
         st.success(f"🌟 Predicted PM2.5: **{pred:.2f} µg/m³**")
 
-        if pred <= 60:
-            st.info("🟢 Air Quality: Good")
-        elif pred <= 120:
-            st.warning("🟡 Air Quality: Moderate")
-        else:
-            st.error("🔴 Air Quality: Poor")
+        st.progress(int(min(pred, 300) / 300 * 100))
+        st.caption("Prediction confidence simulated for visualization")
+
+        st.info(f"AQI Category: **{aqi_category(pred)}**")
 
 # ==================================================
-# 📊 TAB 2 – DATASET OVERVIEW
+# 📊 TAB 2 – DATASET & INTERACTIVE ANALYSIS
 # ==================================================
 with tab2:
-    st.subheader("Dataset Overview")
+    st.subheader("Dataset Overview & Interactive Analysis")
+
+    selected_city = st.selectbox(
+        "Filter by City",
+        options=["All"] + sorted(df["City"].unique().tolist())
+    )
+
+    if selected_city != "All":
+        filtered_df = df[df["City"] == selected_city]
+    else:
+        filtered_df = df
 
     st.write("### Sample Records")
-    st.dataframe(df.head())
+    st.dataframe(filtered_df.head())
+
+    st.write("### AQI Category Distribution")
+    st.bar_chart(filtered_df["AQI Category"].value_counts())
+
+    st.write("### PM2.5 Range Filter")
+    min_pm, max_pm = st.slider(
+        "Select PM2.5 Range",
+        int(df["PM2.5"].min()),
+        int(df["PM2.5"].max()),
+        (0, 200)
+    )
+
+    range_df = filtered_df[
+        (filtered_df["PM2.5"] >= min_pm) &
+        (filtered_df["PM2.5"] <= max_pm)
+    ]
+
+    st.bar_chart(range_df["PM2.5"])
 
     st.write("### Dataset Statistics")
-    st.dataframe(df.describe())
-
-    st.write("### Column Names")
-    st.code(", ".join(df.columns))
+    st.dataframe(filtered_df.describe())
 
 # ==================================================
-# 🗺️ TAB 3 – AIR QUALITY MAP (FIXED)
+# 🗺️ TAB 3 – AIR QUALITY MAP
 # ==================================================
 with tab3:
-    st.subheader("India Air Quality Map (PM2.5)")
+    st.subheader("India Air Quality Map (Average PM2.5)")
 
-    # Average PM2.5 per city
     city_pm = df.groupby("City")["PM2.5"].mean().reset_index()
 
-    # Base map
     m = folium.Map(location=[22.5, 80.0], zoom_start=5)
 
     for _, row in city_pm.iterrows():
@@ -130,13 +180,19 @@ with tab3:
         if city in CITY_COORDS:
             lat, lon = CITY_COORDS[city]
 
+            color = (
+                "green" if pm25 <= 30 else
+                "orange" if pm25 <= 60 else
+                "red"
+            )
+
             folium.CircleMarker(
                 location=[lat, lon],
                 radius=8,
-                popup=f"{city}<br>PM2.5: {pm25:.2f}",
-                color="red" if pm25 > 60 else "orange" if pm25 > 30 else "green",
+                tooltip=f"{city} | PM2.5: {pm25:.2f}",
+                color=color,
                 fill=True,
-                fill_opacity=0.7
+                fill_opacity=0.8
             ).add_to(m)
 
     st_folium(m, width=1000, height=500)
@@ -145,6 +201,6 @@ with tab3:
 # FOOTER
 # --------------------------------------------------
 st.markdown("---")
-
+st.markdown("👨‍🎓 **Student:** Jithin")
 st.markdown("📘 **Course:** CMP7005 – Air Quality Analysis")
 st.markdown("☁️ Deployed on Streamlit Cloud")
